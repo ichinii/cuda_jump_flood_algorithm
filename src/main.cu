@@ -2,8 +2,10 @@
 #include <vector>
 #include <memory>
 #include <chrono>
+
 #include "jfa.h"
 #include "display.h"
+#include "misc.h"
 
 constexpr const unsigned int W = 512;
 // constexpr const unsigned int W = 1<<11;
@@ -48,9 +50,7 @@ void visualize(
 
     if (gid < viewport.x*viewport.y) {
         output[gid] = glm::vec4 (
-            l,
-            b,
-            p,
+            hsv2rgb(glm::vec3(glm::fract(p * 5.), 1, p*0.8f+0.2f)),
             1.f
         );
     }
@@ -118,7 +118,7 @@ int main()
     auto update_sdf = [&] () {
         jfa_init_pointers<<<B, T>>>(pointers, input, W);
         perf_elapsed += perf( [&] {
-            jfa_0(B, T, pointers, W);
+            jfa_2(B, T, pointers, W);
         } );
         ++perf_count;
         jfa_to_sdf<<<B, T>>>(sdf, pointers, W);
@@ -143,14 +143,14 @@ int main()
             create_resources(viewport);
 
             prev_viewport = viewport;
+
+            auto now = steady_clock::now();
+            auto elapsed_time = duration_cast<milliseconds>(now - start_time).count() / 1000.f;
+
+            update_input(elapsed_time);
+            update_sdf();
+            update_output(viewport);
         }
-
-        auto now = steady_clock::now();
-        auto elapsed_time = duration_cast<milliseconds>(now - start_time).count() / 1000.f;
-
-        update_input(elapsed_time);
-        update_sdf();
-        update_output(viewport);
 
         return output_h.data();
     };
