@@ -7,8 +7,8 @@
 #include "display.h"
 #include "misc.h"
 
-constexpr const unsigned int W = 512;
-// constexpr const unsigned int W = 1<<11;
+// constexpr const unsigned int W = 512;
+constexpr const unsigned int W = 1<<11;
 constexpr const unsigned int S = W*W;
 
 constexpr const unsigned int T = std::min(128u, W);
@@ -30,7 +30,7 @@ __global__
 void create_input(bool *input, float seed) {
     unsigned int gid = blockIdx.x*blockDim.x + threadIdx.x;
     auto y = gid / W;
-    input[gid] = hash(gid + seed*y) % 5000 == 0;
+    input[gid] = hash(gid + y) % 5000 == 0;
 }
 
 __global__
@@ -49,26 +49,15 @@ void visualize(
     [[maybe_unused]] auto p = pointers[i] / static_cast<float>(S);
 
     if (gid < viewport.x*viewport.y) {
+        float h = (hash(pointers[i]      ) % S) / static_cast<float>(S);
+        float s = (hash(pointers[i] + S  ) % S) / static_cast<float>(S) * 0.8f + 0.2f;
+        float v = (hash(pointers[i] + S*2) % S) / static_cast<float>(S) * 0.8f + 0.2f;
         output[gid] = glm::vec4 (
-            hsv2rgb(glm::vec3(glm::fract(p * 5.), 1, p*0.8f+0.2f)),
+            hsv2rgb(glm::vec3(h, !b && gid % 128 != 0, 0.3f + b * 0.7f)),
             1.f
         );
     }
 }
-
-template <typename F>
-float perf(F f) {
-    using namespace std::chrono;
-
-    cudaDeviceSynchronize();
-    auto start = steady_clock::now();
-    f();
-    cudaDeviceSynchronize();
-    auto end = steady_clock::now();
-
-    return duration_cast<microseconds>(end - start).count() / 1000.0f;
-}
-
 
 int main()
 {
@@ -118,7 +107,7 @@ int main()
     auto update_sdf = [&] () {
         jfa_init_pointers<<<B, T>>>(pointers, input, W);
         perf_elapsed += perf( [&] {
-            jfa_2(B, T, pointers, W);
+            jfa_3(B, T, pointers, W);
         } );
         ++perf_count;
         jfa_to_sdf<<<B, T>>>(sdf, pointers, W);
@@ -150,6 +139,8 @@ int main()
             update_input(elapsed_time);
             update_sdf();
             update_output(viewport);
+
+            CHECK_LAST_CUDA_ERROR();
         }
 
         return output_h.data();

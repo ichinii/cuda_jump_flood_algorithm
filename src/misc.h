@@ -1,9 +1,11 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <functional>
+#include <chrono>
 
 __device__
-glm::vec3 rgb2hsv(glm::vec3 c) {
+inline glm::vec3 rgb2hsv(glm::vec3 c) {
     using namespace glm;
     vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
     vec4 p = mix(
@@ -19,7 +21,7 @@ glm::vec3 rgb2hsv(glm::vec3 c) {
 }
 
 __device__
-glm::vec3 hsv2rgb(glm::vec3 c) {
+inline glm::vec3 hsv2rgb(glm::vec3 c) {
     using namespace glm;
     vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
     vec3 p = abs(fract(vec3(c.x) + vec3(K)) * 6.0f - vec3(K.w));
@@ -27,6 +29,27 @@ glm::vec3 hsv2rgb(glm::vec3 c) {
 }
 
 __device__
-float length_squared(glm::vec2 v) {
+inline float length_squared(glm::vec2 v) {
     return v.x*v.x + v.y*v.y;
+}
+
+inline float perf(std::function<void()> fn) {
+    using namespace std::chrono;
+
+    cudaDeviceSynchronize();
+    auto start = steady_clock::now();
+    fn();
+    cudaDeviceSynchronize();
+    auto end = steady_clock::now();
+
+    return duration_cast<microseconds>(end - start).count() / 1000.0f;
+}
+
+#define CHECK_LAST_CUDA_ERROR() checkLastError(__FILE__, __LINE__)
+inline void checkLastError(const char* const file, const int line) {
+    cudaError_t err{cudaGetLastError()};
+    if (err != cudaSuccess) {
+        std::cerr << "CUDA Runtime Error at: " << file << ":" << line << std::endl
+            << cudaGetErrorString(err) << std::endl;
+    }
 }
