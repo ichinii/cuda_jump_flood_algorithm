@@ -8,7 +8,7 @@
 #include "misc.h"
 
 // constexpr const unsigned int W = 512;
-constexpr const unsigned int W = 1<<11;
+constexpr const unsigned int W = 1<<10;
 constexpr const unsigned int S = W*W;
 
 constexpr const unsigned int T = std::min(128u, W);
@@ -30,7 +30,7 @@ __global__
 void create_input(bool *input, float seed) {
     unsigned int gid = blockIdx.x*blockDim.x + threadIdx.x;
     auto y = gid / W;
-    input[gid] = hash(gid + y) % 5000 == 0;
+    input[gid] = hash(gid + seed*y*0.1f) % 500 == 0;
 }
 
 __global__
@@ -53,7 +53,10 @@ void visualize(
         float s = (hash(pointers[i] + S  ) % S) / static_cast<float>(S) * 0.8f + 0.2f;
         float v = (hash(pointers[i] + S*2) % S) / static_cast<float>(S) * 0.8f + 0.2f;
         output[gid] = glm::vec4 (
-            hsv2rgb(glm::vec3(h, !b && gid % 128 != 0, 0.3f + b * 0.7f)),
+            // hsv2rgb(glm::vec3(h, !b && gid % 128 != 0, 0.3f + b * 0.7f)),
+            1.0f - l * 100.0f,
+            b,
+            p,
             1.f
         );
     }
@@ -67,6 +70,7 @@ int main()
     // device resources
     bool *input;
     int *pointers;
+    int *pointers2;
     float *sdf;
     glm::vec4 *output;
 
@@ -79,6 +83,7 @@ int main()
 
         cudaMalloc(&input, S * sizeof(bool));
         cudaMalloc(&pointers, S * sizeof(int));
+        cudaMalloc(&pointers2, S * sizeof(int));
         cudaMalloc(&sdf, S * sizeof(float));
         cudaMalloc(&output, viewport.x * viewport.y * sizeof(glm::vec4));
         output_h.resize(viewport.x * viewport.y);
@@ -92,6 +97,7 @@ int main()
             cudaDeviceSynchronize();
             cudaFree(input);
             cudaFree(pointers);
+            cudaFree(pointers2);
             cudaFree(sdf);
             cudaFree(output);
         }
@@ -106,8 +112,11 @@ int main()
     auto perf_count = 0.0f;
     auto update_sdf = [&] () {
         jfa_init_pointers<<<B, T>>>(pointers, input, W);
+        // jfa_init_pointers_2D<<<B, T>>>((IdVec2*)pointers, input, W);
         perf_elapsed += perf( [&] {
-            jfa_3(B, T, pointers, W);
+            // jfa_2(B, T, pointers, W);
+            jfa_6(B, T, pointers, pointers2, W);
+            // jfa_5(B, T, (IdVec2*)pointers, W);
         } );
         ++perf_count;
         jfa_to_sdf<<<B, T>>>(sdf, pointers, W);
@@ -132,6 +141,7 @@ int main()
             create_resources(viewport);
 
             prev_viewport = viewport;
+        }
 
             auto now = steady_clock::now();
             auto elapsed_time = duration_cast<milliseconds>(now - start_time).count() / 1000.f;
@@ -141,7 +151,6 @@ int main()
             update_output(viewport);
 
             CHECK_LAST_CUDA_ERROR();
-        }
 
         return output_h.data();
     };
