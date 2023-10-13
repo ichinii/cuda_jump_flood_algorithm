@@ -30,7 +30,7 @@ __global__
 void create_input(bool *input, float seed) {
     unsigned int gid = blockIdx.x*blockDim.x + threadIdx.x;
     auto y = gid / W;
-    input[gid] = hash(gid + seed*y*0.1f) % 500 == 0;
+    input[gid] = hash(gid + y*0.1f) % 50000 == 0;
 }
 
 __global__
@@ -53,10 +53,10 @@ void visualize(
         float s = (hash(pointers[i] + S  ) % S) / static_cast<float>(S) * 0.8f + 0.2f;
         float v = (hash(pointers[i] + S*2) % S) / static_cast<float>(S) * 0.8f + 0.2f;
         output[gid] = glm::vec4 (
-            // hsv2rgb(glm::vec3(h, !b && gid % 128 != 0, 0.3f + b * 0.7f)),
-            1.0f - l * 100.0f,
-            b,
-            p,
+            hsv2rgb(glm::vec3(h, !b && uv.x % 128 != 0 && uv.y % 128 != 0, 0.3f + b * 0.7f)),
+            // 1.0f - l * 100.0f,
+            // b,
+            // p,
             1.f
         );
     }
